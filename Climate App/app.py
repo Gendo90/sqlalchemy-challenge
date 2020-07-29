@@ -23,6 +23,7 @@ Station = Base.classes.station
 
 precipitation_json_url = "api/v1.0/precipitation"
 stations_json_url = "api/v1.0/stations"
+tobs_last_year_active = "api/v1.0/tobs"
 
 @app.route('/')
 def home():
@@ -32,6 +33,7 @@ def home():
     output_html += "<ul>"
     output_html += f"<li><a href={home_url+precipitation_json_url}>/{precipitation_json_url}</a></li>"
     output_html += f"<li><a href={home_url+stations_json_url}>/{stations_json_url}</a></li>"
+    output_html += f"<li><a href={home_url+tobs_last_year_active}>/{tobs_last_year_active}</a></li>"
     return output_html
 
 @app.route("/api/v1.0/precipitation")
@@ -68,7 +70,16 @@ def stations_json():
     output_list = [map_Station_to_Dict(row) for row in results]
     return jsonify(output_list)
         
-
+@app.route("/api/v1.0/tobs")
+def tobs_json():
+    session = Session(db)
+    results = session.query(Measurement.date, Measurement.tobs).filter(Measurement.station == 'USC00519281').\
+                                        filter(Measurement.date >= '2016-08-23').order_by(Measurement.date).all()
+    date_to_tobs_most_active_last_year = {}
+    for row in results:
+        date_to_tobs_most_active_last_year[row[0]] = row[1]
+        
+    return jsonify(date_to_tobs_most_active_last_year)
 
 if __name__ == "__main__":
     app.run(debug=True)
