@@ -1,6 +1,6 @@
 # 1. import 
 from flask import Flask, jsonify, request
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, func
 from sqlalchemy.orm import Session
 from sqlalchemy.ext.automap import automap_base
 from collections import defaultdict
@@ -20,20 +20,31 @@ Base.prepare(db, reflect=True)
 Measurement = Base.classes.measurement
 Station = Base.classes.station
 
-
+#static routes
 precipitation_json_url = "api/v1.0/precipitation"
 stations_json_url = "api/v1.0/stations"
 tobs_last_year_active = "api/v1.0/tobs"
+
+#dynamic routes
+start_date_only_tobs = "api/v1.0/start"
+start_end_dates_tobs = "api/v1.0/start/end"
 
 @app.route('/')
 def home():
     home_url = request.base_url
     output_html = "<h1>Hawaii Weather API</h1>"
     output_html += "<h3>Use the following routes to access API's</h3>"
+    output_html += "<h3>Static Routes</h3>"
     output_html += "<ul>"
     output_html += f"<li><a href={home_url+precipitation_json_url}>/{precipitation_json_url}</a></li>"
     output_html += f"<li><a href={home_url+stations_json_url}>/{stations_json_url}</a></li>"
     output_html += f"<li><a href={home_url+tobs_last_year_active}>/{tobs_last_year_active}</a></li>"
+    output_html += "</ul>"
+    output_html += "<h3>Dynamic Routes</h3>"
+    output_html += "<ul>"
+    output_html += f"<li>/{start_date_only_tobs} with 'start' date in the format 2016-08-23 for August 23, 2016</li>"
+    output_html += f"<li>/{start_end_dates_tobs} with 'start' and 'end' dates in the format 2016-08-23 for August 23, 2016</li>"
+    output_html += "</ul>"
     return output_html
 
 @app.route("/api/v1.0/precipitation")
@@ -80,6 +91,48 @@ def tobs_json():
         date_to_tobs_most_active_last_year[row[0]] = row[1]
         
     return jsonify(date_to_tobs_most_active_last_year)
+
+#dynamic routes
+
+@app.route("/api/v1.0/<start>")
+def start_date_only_json(start):
+    session = Session(db)
+    
+    min_temp_sql = session.query(func.min(Measurement.tobs)).\
+                filter(Measurement.station == "USC00519281").\
+                filter(Measurement.date >= start).order_by(Measurement.tobs).first()
+
+    max_temp_sql = session.query(func.max(Measurement.tobs)).\
+                filter(Measurement.station == "USC00519281").\
+                filter(Measurement.date >= start).order_by(Measurement.tobs).first()
+
+    avg_temp_sql = session.query(func.avg(Measurement.tobs)).\
+                filter(Measurement.station == "USC00519281").\
+                filter(Measurement.date >= start).order_by(Measurement.tobs).first()
+    
+    results = {"minimum": min_temp_sql, "average": avg_temp_sql, "maximum": max_temp_sql}
+    
+    return jsonify(results)
+
+@app.route("/api/v1.0/<start>/<end>")
+def start_end_dates_json(start, end):
+    session = Session(db)
+    
+    min_temp_sql = session.query(func.min(Measurement.tobs)).\
+                filter(Measurement.station == "USC00519281").\
+                filter(Measurement.date >= start, Measurement.date <= end).order_by(Measurement.tobs).first()
+
+    max_temp_sql = session.query(func.max(Measurement.tobs)).\
+                filter(Measurement.station == "USC00519281").\
+                filter(Measurement.date >= start, Measurement.date <= end).order_by(Measurement.tobs).first()
+
+    avg_temp_sql = session.query(func.avg(Measurement.tobs)).\
+                filter(Measurement.station == "USC00519281").\
+                filter(Measurement.date >= start, Measurement.date <= end).order_by(Measurement.tobs).first()
+    
+    results = {"minimum": min_temp_sql, "average": avg_temp_sql, "maximum": max_temp_sql}
+    
+    return jsonify(results)
 
 if __name__ == "__main__":
     app.run(debug=True)
